@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hava Durumum — Türkiye İl/İlçe Detaylı Tahmin</title>
+<style>
+:root{
+  --bg:#0f1720; --panel:#16212d; --panel2:#1c2a39; --line:#26384b; --text:#e6edf3; --muted:#8ea3b8;
+  --accent:#4fb3ff; --sun:#ffc94d; --rain:#3d8bfd; --snow:#cfe8ff; --wind:#7ee0b5; --warn:#ff8a4d; --danger:#ff4d6d;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px}
+header{position:sticky;top:0;z-index:5;background:rgba(15,23,32,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:1200px;margin:0 auto}
+.brand{font-weight:700;margin-right:8px;white-space:nowrap}
+select,input,button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+select{min-width:150px}
+button{cursor:pointer;background:var(--accent);color:#04121f;border:none;font-weight:600}
+button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line);font-weight:500}
+.search{position:relative}
+.search input{width:220px}
+.sugg{position:absolute;top:100%;left:0;right:0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:300px;overflow:auto;display:none}
+.sugg div{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line)}
+.sugg div:hover{background:var(--line)}
+.sugg small{color:var(--muted)}
+main{max-width:1200px;margin:0 auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:17px}
+.muted{color:var(--muted)}
+.loc{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline}
+.loc h1{margin:0;font-size:22px}
+.now{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.now .big{font-size:56px;line-height:1}
+.now .temp{font-size:44px;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.kpi{background:var(--panel2);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:18px}
+.kpi span{color:var(--muted);font-size:12.5px}
+.alert{border-left:4px solid var(--warn);background:#2a1f17;padding:10px 12px;border-radius:8px;margin:6px 0}
+.alert.danger{border-color:var(--danger);background:#2a1620}
+.alert.ok{border-color:var(--wind);background:#13261f}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.day{background:var(--panel2);border:2px solid transparent;border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer}
+.day.sel{border-color:var(--accent)}
+.day .ic{font-size:28px}
+.day .rr{color:var(--rain);font-weight:600;font-size:13px}
+.day .sn{color:var(--snow);font-size:12px}
+@media (max-width:760px){.days{grid-template-columns:repeat(4,1fr)} .search input{width:160px} .now .big{font-size:42px}.now .temp{font-size:34px}}
+.chartwrap{overflow-x:auto}
+svg text{fill:var(--muted);font-size:11px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{color:var(--muted);font-weight:500;font-size:12.5px;position:sticky;top:0;background:var(--panel)}
+td.l{text-align:left}
+.tablewrap{overflow:auto;max-height:640px}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:12px;font-weight:600}
+.mmbar{display:inline-block;height:8px;border-radius:4px;background:var(--rain);vertical-align:middle;margin-left:6px}
+tr.past td{opacity:.45}
+tr.nowrow td{background:#1d3046}
+.arrow{display:inline-block}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.episodes .ep{background:var(--panel2);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.agree{font-weight:700}
+a{color:var(--accent)}
+#status{font-size:13px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <span class="brand">🌦️ Hava Durumum</span>
+    <select id="il" aria-label="İl"></select>
+    <select id="ilce" aria-label="İlçe"></select>
+    <button id="go">Göster</button>
+    <div class="search">
+      <input id="q" placeholder="Mahalle / köy / yer ara…" autocomplete="off">
+      <div class="sugg" id="sugg"></div>
+    </div>
+    <button class="ghost" id="refresh" title="Verileri yenile">↻ Yenile</button>
+    <span id="status" class="muted"></span>
+  </div>
+</header>
+
+<main id="app">
+  <div class="card muted">Yukarıdan il ve ilçe seç, “Göster”e bas.</div>
+</main>
+
+<footer>
+  Veri: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS, UK Met Office, Météo-France modelleri) · Konum: Open-Meteo Geocoding (GeoNames).
+  Resmî uyarılar için <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">MGM</a> ve
+  <a href="https://www.meteoalarm.org/en/live/region/TR" target="_blank" rel="noopener">MeteoAlarm</a>.
+  Hiçbir tahmin %100 doğru değildir; “Model Uyumu” bölümü tahminin ne kadar güvenilir olduğunu gösterir. Sayfa 30 dakikada bir kendini yeniler.
+</footer>
+
+<script>
+const ILCELER = {"Adana":["Aladağ","Ceyhan","Çukurova","Feke","İmamoğlu","Karaisalı","Karataş","Kozan","Pozantı","Saimbeyli","Sarıçam","Seyhan","Tufanbeyli","Yumurtalık","Yüreğir"],"Adıyaman":["Besni","Çelikhan","Gerger","Gölbaşı","Kahta","Merkez","Samsat","Sincik","Tut"],"Afyonkarahisar":["Başmakçı","Bayat","Bolvadin","Çay","Çobanlar","Dazkırı","Dinar","Emirdağ","Evciler","Hocalar","İhsaniye","İscehisar","Kızılören","Merkez","Sandıklı","Sinanpaşa","Sultandağı","Şuhut"],"Ağrı":["Diyadin","Doğubayazıt","Eleşkirt","Hamur","Merkez","Patnos","Taşlıçay","Tutak"],"Amasya":["Göynücek","Gümüşhacıköy","Hamamözü","Merkez","Merzifon","Suluova","Taşova"],"Ankara":["Akyurt","Altındağ","Ayaş","Bala","Beypazarı","Çamlıdere","Çankaya","Çubuk","Elmadağ","Etimesgut","Evren","Gölbaşı","Güdül","Haymana","Kahramankazan","Kalecik","Keçiören","Kızılcahamam","Mamak","Nallıhan","Polatlı","Pursaklar","Sincan","Şereflikoçhisar","Yenimahalle"],"Antalya":["Akseki","Aksu","Alanya","Demre","Döşemealtı","Elmalı","Finike","Gazipaşa","Gündoğmuş","İbradı","Kaş","Kemer","Kepez","Konyaaltı","Korkuteli","Kumluca","Manavgat","Muratpaşa","Serik"],"Artvin":["Ardanuç","Arhavi","Borçka","Hopa","Kemalpaşa","Merkez","Murgul","Şavşat","Yusufeli"],"Aydın":["Bozdoğan","Buharkent","Çine","Didim","Efeler","Germencik","İncirliova","Karacasu","Karpuzlu","Koçarlı","Köşk","Kuşadası","Kuyucak","Nazilli","Söke","Sultanhisar","Yenipazar"],"Balıkesir":["Altıeylül","Ayvalık","Balya","Bandırma","Bigadiç","Burhaniye","Dursunbey","Edremit","Erdek","Gömeç","Gönen","Havran","İvrindi","Karesi","Kepsut","Manyas","Marmara","Savaştepe","Sındırgı","Susurluk"],"Bilecik":["Bozüyük","Gölpazarı","İnhisar","Merkez","Osmaneli","Pazaryeri","Söğüt","Yenipazar"],"Bingöl":["Adaklı","Genç","Karlıova","Kiğı","Merkez","Solhan","Yayladere","Yedisu"],"Bitlis":["Adilcevaz","Ahlat","Güroymak","Hizan","Merkez","Mutki","Tatvan"],"Bolu":["Dörtdivan","Gerede","Göynük","Kıbrıscık","Mengen","Merkez","Mudurnu","Seben","Yeniçağa"],"Burdur":["Ağlasun","Altınyayla","Bucak","Çavdır","Çeltikçi","Gölhisar","Karamanlı","Kemer","Merkez","Tefenni","Yeşilova"],"Bursa":["Büyükorhan","Gemlik","Gürsu","Harmancık","İnegöl","İznik","Karacabey","Keles","Kestel","Mudanya","Mustafakemalpaşa","Nilüfer","Orhaneli","Orhangazi","Osmangazi","Yenişehir","Yıldırım"],"Çanakkale":["Ayvacık","Bayramiç","Biga","Bozcaada","Çan","Eceabat","Ezine","Gelibolu","Gökçeada","Lapseki","Merkez","Yenice"],"Çankırı":["Atkaracalar","Bayramören","Çerkeş","Eldivan","Ilgaz","Kızılırmak","Korgun","Kurşunlu","Merkez","Orta","Şabanözü","Yapraklı"],"Çorum":["Alaca","Bayat","Boğazkale","Dodurga","İskilip","Kargı","Laçin","Mecitözü","Merkez","Oğuzlar","Ortaköy","Osmancık","Sungurlu","Uğurludağ"],"Denizli":["Acıpayam","Babadağ","Baklan","Bekilli","Beyağaç","Bozkurt","Buldan","Çal","Çameli","Çardak","Çivril","Güney","Honaz","Kale","Merkezefendi","Pamukkale","Sarayköy","Serinhisar","Tavas"],"Diyarbakır":["Bağlar","Bismil","Çermik","Çınar","Çüngüş","Dicle","Eğil","Ergani","Hani","Hazro","Kayapınar","Kocaköy","Kulp","Lice","Silvan","Sur","Yenişehir"],"Edirne":["Enez","Havsa","İpsala","Keşan","Lalapaşa","Meriç","Merkez","Süloğlu","Uzunköprü"],"Elazığ":["Ağın","Alacakaya","Arıcak","Baskil","Karakoçan","Keban","Kovancılar","Maden","Merkez","Palu","Sivrice"],"Erzincan":["Çayırlı","İliç","Kemah","Kemaliye","Merkez","Otlukbeli","Refahiye","Tercan","Üzümlü"],"Erzurum":["Aşkale","Aziziye","Çat","Hınıs","Horasan","İspir","Karaçoban","Karayazı","Köprüköy","Narman","Oltu","Olur","Palandöken","Pasinler","Pazaryolu","Şenkaya","Tekman","Tortum","Uzundere","Yakutiye"],"Eskişehir":["Alpu","Beylikova","Çifteler","Günyüzü","Han","İnönü","Mahmudiye","Mihalgazi","Mihalıççık","Odunpazarı","Sarıcakaya","Seyitgazi","Sivrihisar","Tepebaşı"],"Gaziantep":["Araban","İslahiye","Karkamış","Nizip","Nurdağı","Oğuzeli","Şahinbey","Şehitkamil","Yavuzeli"],"Giresun":["Alucra","Bulancak","Çamoluk","Çanakçı","Dereli","Doğankent","Espiye","Eynesil","Görele","Güce","Keşap","Merkez","Piraziz","Şebinkarahisar","Tirebolu","Yağlıdere"],"Gümüşhane":["Kelkit","Köse","Kürtün","Merkez","Şiran","Torul"],"Hakkari":["Çukurca","Derecik","Merkez","Şemdinli","Yüksekova"],"Hatay":["Altınözü","Antakya","Arsuz","Belen","Defne","Dörtyol","Erzin","Hassa","İskenderun","Kırıkhan","Kumlu","Payas","Reyhanlı","Samandağ","Yayladağı"],"Isparta":["Aksu","Atabey","Eğirdir","Gelendost","Gönen","Keçiborlu","Merkez","Senirkent","Sütçüler","Şarkikaraağaç","Uluborlu","Yalvaç","Yenişarbademli"],"Mersin":["Akdeniz","Anamur","Aydıncık","Bozyazı","Çamlıyayla","Erdemli","Gülnar","Mezitli","Mut","Silifke","Tarsus","Toroslar","Yenişehir"],"İstanbul":["Adalar","Arnavutköy","Ataşehir","Avcılar","Bağcılar","Bahçelievler","Bakırköy","Başakşehir","Bayrampaşa","Beşiktaş","Beykoz","Beylikdüzü","Beyoğlu","Büyükçekmece","Çatalca","Çekmeköy","Esenler","Esenyurt","Eyüpsultan","Fatih","Gaziosmanpaşa","Güngören","Kadıköy","Kağıthane","Kartal","Küçükçekmece","Maltepe","Pendik","Sancaktepe","Sarıyer","Silivri","Sultanbeyli","Sultangazi","Şile","Şişli","Tuzla","Ümraniye","Üsküdar","Zeytinburnu"],"İzmir":["Aliağa","Balçova","Bayındır","Bayraklı","Bergama","Beydağ","Bornova","Buca","Çeşme","Çiğli","Dikili","Foça","Gaziemir","Güzelbahçe","Karabağlar","Karaburun","Karşıyaka","Kemalpaşa","Kınık","Kiraz","Konak","Menderes","Menemen","Narlıdere","Ödemiş","Seferihisar","Selçuk","Tire","Torbalı","Urla"],"Kars":["Akyaka","Arpaçay","Digor","Kağızman","Merkez","Sarıkamış","Selim","Susuz"],"Kastamonu":["Abana","Ağlı","Araç","Azdavay","Bozkurt","Cide","Çatalzeytin","Daday","Devrekani","Doğanyurt","Hanönü","İhsangazi","İnebolu","Küre","Merkez","Pınarbaşı","Seydiler","Şenpazar","Taşköprü","Tosya"],"Kayseri":["Akkışla","Bünyan","Develi","Felahiye","Hacılar","İncesu","Kocasinan","Melikgazi","Özvatan","Pınarbaşı","Sarıoğlan","Sarız","Talas","Tomarza","Yahyalı","Yeşilhisar"],"Kırklareli":["Babaeski","Demirköy","Kofçaz","Lüleburgaz","Merkez","Pehlivanköy","Pınarhisar","Vize"],"Kırşehir":["Akçakent","Akpınar","Boztepe","Çiçekdağı","Kaman","Merkez","Mucur"],"Kocaeli":["Başiskele","Çayırova","Darıca","Derince","Dilovası","Gebze","Gölcük","İzmit","Kandıra","Karamürsel","Kartepe","Körfez"],"Konya":["Ahırlı","Akören","Akşehir","Altınekin","Beyşehir","Bozkır","Cihanbeyli","Çeltik","Çumra","Derbent","Derebucak","Doğanhisar","Emirgazi","Ereğli","Güneysınır","Hadim","Halkapınar","Hüyük","Ilgın","Kadınhanı","Karapınar","Karatay","Kulu","Meram","Sarayönü","Selçuklu","Seydişehir","Taşkent","Tuzlukçu","Yalıhüyük","Yunak"],"Kütahya":["Altıntaş","Aslanapa","Çavdarhisar","Domaniç","Dumlupınar","Emet","Gediz","Hisarcık","Merkez","Pazarlar","Simav","Şaphane","Tavşanlı"],"Malatya":["Akçadağ","Arapgir","Arguvan","Battalgazi","Darende","Doğanşehir","Doğanyol","Hekimhan","Kale","Kuluncak","Pütürge","Yazıhan","Yeşilyurt"],"Manisa":["Ahmetli","Akhisar","Alaşehir","Demirci","Gölmarmara","Gördes","Kırkağaç","Köprübaşı","Kula","Salihli","Sarıgöl","Saruhanlı","Selendi","Soma","Şehzadeler","Turgutlu","Yunusemre"],"Kahramanmaraş":["Afşin","Andırın","Çağlayancerit","Dulkadiroğlu","Ekinözü","Elbistan","Göksun","Nurhak","Onikişubat","Pazarcık","Türkoğlu"],"Mardin":["Artuklu","Dargeçit","Derik","Kızıltepe","Mazıdağı","Midyat","Nusaybin","Ömerli","Savur","Yeşilli"],"Muğla":["Bodrum","Dalaman","Datça","Fethiye","Kavaklıdere","Köyceğiz","Marmaris","Menteşe","Milas","Ortaca","Seydikemer","Ula","Yatağan"],"Muş":["Bulanık","Hasköy","Korkut","Malazgirt","Merkez","Varto"],"Nevşehir":["Acıgöl","Avanos","Derinkuyu","Gülşehir","Hacıbektaş","Kozaklı","Merkez","Ürgüp"],"Niğde":["Altunhisar","Bor","Çamardı","Çiftlik","Merkez","Ulukışla"],"Ordu":["Akkuş","Altınordu","Aybastı","Çamaş","Çatalpınar","Çaybaşı","Fatsa","Gölköy","Gülyalı","Gürgentepe","İkizce","Kabadüz","Kabataş","Korgan","Kumru","Mesudiye","Perşembe","Ulubey","Ünye"],"Rize":["Ardeşen","Çamlıhemşin","Çayeli","Derepazarı","Fındıklı","Güneysu","Hemşin","İkizdere","İyidere","Kalkandere","Merkez","Pazar"],"Sakarya":["Adapazarı","Akyazı","Arifiye","Erenler","Ferizli","Geyve","Hendek","Karapürçek","Karasu","Kaynarca","Kocaali","Pamukova","Sapanca","Serdivan","Söğütlü","Taraklı"],"Samsun":["19 Mayıs","Alaçam","Asarcık","Atakum","Ayvacık","Bafra","Canik","Çarşamba","Havza","İlkadım","Kavak","Ladik","Salıpazarı","Tekkeköy","Terme","Vezirköprü","Yakakent"],"Siirt":["Baykan","Eruh","Kurtalan","Merkez","Pervari","Şirvan","Tillo"],"Sinop":["Ayancık","Boyabat","Dikmen","Durağan","Erfelek","Gerze","Merkez","Saraydüzü","Türkeli"],"Sivas":["Akıncılar","Altınyayla","Divriği","Doğanşar","Gemerek","Gölova","Gürün","Hafik","İmranlı","Kangal","Koyulhisar","Merkez","Suşehri","Şarkışla","Ulaş","Yıldızeli","Zara"],"Tekirdağ":["Çerkezköy","Çorlu","Ergene","Hayrabolu","Kapaklı","Malkara","Marmaraereğlisi","Muratlı","Saray","Süleymanpaşa","Şarköy"],"Tokat":["Almus","Artova","Başçiftlik","Erbaa","Merkez","Niksar","Pazar","Reşadiye","Sulusaray","Turhal","Yeşilyurt","Zile"],"Trabzon":["Akçaabat","Araklı","Arsin","Beşikdüzü","Çarşıbaşı","Çaykara","Dernekpazarı","Düzköy","Hayrat","Köprübaşı","Maçka","Of","Ortahisar","Sürmene","Şalpazarı","Tonya","Vakfıkebir","Yomra"],"Tunceli":["Çemişgezek","Hozat","Mazgirt","Merkez","Nazımiye","Ovacık","Pertek","Pülümür"],"Şanlıurfa":["Akçakale","Birecik","Bozova","Ceylanpınar","Eyyübiye","Halfeti","Haliliye","Harran","Hilvan","Karaköprü","Siverek","Suruç","Viranşehir"],"Uşak":["Banaz","Eşme","Karahallı","Merkez","Sivaslı","Ulubey"],"Van":["Bahçesaray","Başkale","Çaldıran","Çatak","Edremit","Erciş","Gevaş","Gürpınar","İpekyolu","Muradiye","Özalp","Saray","Tuşba"],"Yozgat":["Akdağmadeni","Aydıncık","Boğazlıyan","Çandır","Çayıralan","Çekerek","Kadışehri","Merkez","Saraykent","Sarıkaya","Sorgun","Şefaatli","Yenifakılı","Yerköy"],"Zonguldak":["Alaplı","Çaycuma","Devrek","Ereğli","Gökçebey","Kilimli","Kozlu","Merkez"],"Aksaray":["Ağaçören","Eskil","Gülağaç","Güzelyurt","Merkez","Ortaköy","Sarıyahşi","Sultanhanı"],"Bayburt":["Aydıntepe","Demirözü","Merkez"],"Karaman":["Ayrancı","Başyayla","Ermenek","Kazımkarabekir","Merkez","Sarıveliler"],"Kırıkkale":["Bahşılı","Balışeyh","Çelebi","Delice","Karakeçili","Keskin","Merkez","Sulakyurt","Yahşihan"],"Batman":["Beşiri","Gercüş","Hasankeyf","Kozluk","Merkez","Sason"],"Şırnak":["Beytüşşebap","Cizre","Güçlükonak","İdil","Merkez","Silopi","Uludere"],"Bartın":["Amasra","Kurucaşile","Merkez","Ulus"],"Ardahan":["Çıldır","Damal","Göle","Hanak","Merkez","Posof"],"Iğdır":["Aralık","Karakoyunlu","Merkez","Tuzluca"],"Yalova":["Altınova","Armutlu","Çınarcık","Çiftlikköy","Merkez","Termal"],"Karabük":["Eflani","Eskipazar","Merkez","Ovacık","Safranbolu","Yenice"],"Kilis":["Elbeyli","Merkez","Musabeyli","Polateli"],"Osmaniye":["Bahçe","Düziçi","Hasanbeyli","Kadirli","Merkez","Sumbas","Toprakkale"],"Düzce":["Akçakoca","Cumayeri","Çilimli","Gölyaka","Gümüşova","Kaynaşlı","Merkez","Yığılca"]};
+
+/* ---------- yardımcılar ---------- */
+const $ = s => document.querySelector(s);
+const TZ = 'Europe/Istanbul';
+const norm = s => (s||'').toLocaleLowerCase('tr').replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s').replace(/ö/g,'o').replace(/ç/g,'c').replace(/â/g,'a').replace(/î/g,'i').replace(/û/g,'u').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (v, d=1) => (v==null || isNaN(v)) ? '–' : Number(v).toLocaleString('tr-TR',{maximumFractionDigits:d, minimumFractionDigits:0});
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+async function getJSON(url){
+  const r = await fetch(url);
+  if(!r.ok){ let m=''; try{ m=(await r.json()).reason||''; }catch(e){} throw new Error('HTTP '+r.status+' '+m); }
+  return r.json();
+}
+
+/* WMO hava kodları */
+const WMO = {
+  0:['Açık','☀️','🌙'],1:['Çoğunlukla açık','🌤️','🌙'],2:['Parçalı bulutlu','⛅','☁️'],3:['Kapalı','☁️','☁️'],
+  45:['Sis','🌫️','🌫️'],48:['Kırağılı sis','🌫️','🌫️'],
+  51:['Hafif çisenti','🌦️','🌧️'],53:['Çisenti','🌦️','🌧️'],55:['Yoğun çisenti','🌧️','🌧️'],
+  56:['Donan çisenti','🌧️','🌧️'],57:['Yoğun donan çisenti','🌧️','🌧️'],
+  61:['Hafif yağmur','🌦️','🌧️'],63:['Yağmur','🌧️','🌧️'],65:['Kuvvetli yağmur','🌧️','🌧️'],
+  66:['Donan yağmur','🌧️','🌧️'],67:['Kuvvetli donan yağmur','🌧️','🌧️'],
+  71:['Hafif kar','🌨️','🌨️'],73:['Kar','🌨️','🌨️'],75:['Yoğun kar','❄️','❄️'],77:['Kar taneleri','🌨️','🌨️'],
+  80:['Hafif sağanak','🌦️','🌧️'],81:['Sağanak','🌧️','🌧️'],82:['Şiddetli sağanak','⛈️','⛈️'],
+  85:['Hafif kar sağanağı','🌨️','🌨️'],86:['Yoğun kar sağanağı','❄️','❄️'],
+  95:['Gök gürültülü fırtına','⛈️','⛈️'],96:['Dolu ile fırtına','⛈️','⛈️'],99:['Kuvvetli dolu ile fırtına','⛈️','⛈️']
+};
+const wmo = (c, day=1) => { const w = WMO[c] || ['Bilinmiyor','❔','❔']; return {txt:w[0], ic: day ? w[1] : w[2]}; };
+
+/* Yağmur şiddeti (mm/saat) — meteorolojik sınıflama */
+function rainClass(mm){
+  if(mm == null || mm < 0.1) return {k:0, txt:'Yağış yok', col:'transparent', fg:'var(--muted)'};
+  if(mm < 0.5)  return {k:1, txt:'Çok hafif / çisenti', col:'#2b4a6b', fg:'#cfe3ff', note:'Şemsiyesiz idare edilir, zemin hafif nemlenir.'};
+  if(mm < 2.5)  return {k:2, txt:'Hafif', col:'#2f6fb5', fg:'#fff', note:'Islatır; şemsiye gerekir, kısa yürüyüşte idare eder.'};
+  if(mm < 7.6)  return {k:3, txt:'Orta', col:'#3d8bfd', fg:'#04121f', note:'Belirgin yağmur, su birikintileri oluşur.'};
+  if(mm < 20)   return {k:4, txt:'Kuvvetli', col:'#ff8a4d', fg:'#1b0c02', note:'Şemsiye zor korur, görüş azalır, yollar su tutar.'};
+  if(mm < 50)   return {k:5, txt:'Çok kuvvetli', col:'#ff4d6d', fg:'#fff', note:'Ani sel / su baskını riski, dışarı çıkmamak iyi olur.'};
+  return            {k:6, txt:'Aşırı (sel riski)', col:'#b5179e', fg:'#fff', note:'Çok tehlikeli; sel ve taşkın beklenir.'};
+}
+function snowClass(cm){
+  if(cm == null || cm < 0.05) return null;
+  if(cm < 0.5) return {txt:'Hafif kar', col:'#9cc7ff'};
+  if(cm < 2)   return {txt:'Orta kar', col:'#cfe8ff'};
+  if(cm < 4)   return {txt:'Yoğun kar', col:'#ffffff'};
+  return {txt:'Çok yoğun kar', col:'#ffffff'};
+}
+function windClass(kmh){
+  if(kmh == null) return {txt:'–', col:'var(--muted)'};
+  if(kmh < 6)  return {txt:'Durgun', col:'var(--muted)'};
+  if(kmh < 20) return {txt:'Hafif', col:'var(--text)'};
+  if(kmh < 39) return {txt:'Orta', col:'var(--wind)'};
+  if(kmh < 50) return {txt:'Kuvvetli', col:'var(--sun)'};
+  if(kmh < 62) return {txt:'Çok kuvvetli', col:'var(--warn)'};
+  if(kmh < 75) return {txt:'Fırtına', col:'var(--danger)'};
+  return {txt:'Kuvvetli fırtına', col:'var(--danger)'};
+}
+const DIRS = ['K','KKD','KD','DKD','D','DGD','GD','GGD','G','GGB','GB','BGB','B','BKB','KB','KKB'];
+const dirTxt = deg => deg==null ? '' : DIRS[Math.round(deg/22.5)%16];
+const arrow = deg => deg==null ? '' : `<span class="arrow" style="transform:rotate(${deg+180}deg)" title="${deg}° (${dirTxt(deg)}'den esiyor)">↑</span>`;
+const rainBadge = mm => { const c = rainClass(mm); return c.k ? `<span class="badge" style="background:${c.col};color:${c.fg}">${c.txt}</span>` : ''; };
+
+const hourOf = t => t.slice(11,16);
+const dayName = d => new Date(d+'T12:00:00').toLocaleDateString('tr-TR',{weekday:'short', day:'numeric', month:'short', timeZone:'UTC'});
+const dayLong = d => new Date(d+'T12:00:00').toLocaleDateString('tr-TR',{weekday:'long', day:'numeric', month:'long', timeZone:'UTC'});
+function nowLocalISO(){
+  const p = new Intl.DateTimeFormat('sv-SE',{timeZone:TZ, year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date());
+  return p.replace(' ','T'); // "2026-11-23T17:05"
+}
+
+/* ---------- il / ilçe seçiciler ---------- */
+const ilSel = $('#il'), ilceSel = $('#ilce');
+const iller = Object.keys(ILCELER).sort((a,b)=>a.localeCompare(b,'tr'));
+ilSel.innerHTML = iller.map(i=>`<option>${esc(i)}</option>`).join('');
+function fillIlce(il, sel){
+  const list = [...(ILCELER[il]||[])].sort((a,b)=>a.localeCompare(b,'tr'));
+  ilceSel.innerHTML = `<option value="">— İl merkezi —</option>` + list.map(x=>`<option${x===sel?' selected':''}>${esc(x)}</option>`).join('');
+}
+ilSel.addEventListener('change', ()=>fillIlce(ilSel.value));
+$('#go').addEventListener('click', ()=>loadByIlIlce(ilSel.value, ilceSel.value));
+$('#refresh').addEventListener('click', ()=>{ if(state.loc) loadForecast(state.loc); });
+
+/* ---------- konum bulma ---------- */
+const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
+async function geoSearch(name, count=30){
+  const u = `${GEO}?name=${encodeURIComponent(name)}&count=${count}&language=tr&format=json&countryCode=TR`;
+  const j = await getJSON(u);
+  return (j.results||[]).filter(r=>r.country_code==='TR');
+}
+function scoreFeature(fc, wantCenter){
+  const order = wantCenter ? ['PPLA','PPLA2','ADM1','PPLA3','PPL','ADM2'] : ['ADM2','PPLA2','PPLA','PPLA3','PPL','ADM3','PPLX'];
+  const i = order.indexOf(fc); return i<0 ? 99 : i;
+}
+async function resolve(il, ilce){
+  const nIl = norm(il);
+  if(ilce){
+    const res = await geoSearch(ilce);
+    const nI = norm(ilce);
+    const cand = res.filter(r => norm(r.admin1)===nIl && (norm(r.name)===nI || norm(r.admin2)===nI));
+    const pool = cand.length ? cand : res.filter(r => norm(r.admin1)===nIl);
+    if(pool.length){
+      pool.sort((a,b)=> (norm(b.name)===nI) - (norm(a.name)===nI) || scoreFeature(a.feature_code) - scoreFeature(b.feature_code) || (b.population||0)-(a.population||0));
+      const r = pool[0];
+      return {name: ilce, il, lat:r.latitude, lon:r.longitude, elev:r.elevation, matched:r.name, fc:r.feature_code, exact: !!cand.length};
+    }
+  }
+  // il merkezi
+  const res = await geoSearch(il);
+  let pool = res.filter(r => norm(r.admin1)===nIl);
+  if(!pool.length) pool = res.filter(r => norm(r.name)===nIl);
+  if(!pool.length) throw new Error(`"${il}" için konum bulunamadı`);
+  pool.sort((a,b)=> scoreFeature(a.feature_code,true)-scoreFeature(b.feature_code,true) || (b.population||0)-(a.population||0));
+  const r = pool[0];
+  return {name: ilce ? ilce : `${il} (merkez)`, il, lat:r.latitude, lon:r.longitude, elev:r.elevation, matched:r.name, fc:r.feature_code, exact: !ilce, fallback: !!ilce};
+}
+async function loadByIlIlce(il, ilce){
+  setStatus('<span class="spinner"></span> Konum bulunuyor…');
+  try{
+    const loc = await resolve(il, ilce);
+    store.set('hd_sel', {il, ilce});
+    await loadForecast(loc);
+  }catch(e){ showError(e); }
+}
+
+/* serbest arama */
+let qTimer;
+$('#q').addEventListener('input', e=>{
+  clearTimeout(qTimer);
+  const v = e.target.value.trim();
+  if(v.length < 2){ $('#sugg').style.display='none'; return; }
+  qTimer = setTimeout(async ()=>{
+    try{
+      const res = await geoSearch(v, 15);
+      const box = $('#sugg');
+      if(!res.length){ box.innerHTML = '<div class="muted">Sonuç yok</div>'; box.style.display='block'; return; }
+      box.innerHTML = res.map((r,i)=>`<div data-i="${i}">${esc(r.name)} <small>${esc([r.admin3, r.admin2, r.admin1].filter(Boolean).join(', '))}${r.elevation!=null?' · '+Math.round(r.elevation)+' m':''}</small></div>`).join('');
+      box.style.display='block';
+      box.onclick = ev=>{
+        const d = ev.target.closest('[data-i]'); if(!d) return;
+        const r = res[+d.dataset.i];
+        box.style.display='none'; $('#q').value='';
+        loadForecast({name:r.name, il:r.admin1||'', ilce:r.admin2||'', lat:r.latitude, lon:r.longitude, elev:r.elevation, matched:r.name, fc:r.feature_code, exact:true});
+      };
+    }catch(err){ /* sessiz */ }
+  }, 300);
+});
+document.addEventListener('click', e=>{ if(!e.target.closest('.search')) $('#sugg').style.display='none'; });
+
+/* ---------- tahmin ---------- */
+const FC = 'https://api.open-meteo.com/v1/forecast';
+const HOURLY = 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,rain,showers,snowfall,snow_depth,precipitation_probability,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m,visibility,uv_index,is_day,sunshine_duration';
+const DAILY = 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,sunrise,sunset,sunshine_duration,uv_index_max';
+const CURRENT = 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,rain,snowfall,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day';
+const MODELS = [
+  {id:'ecmwf_ifs025', name:'ECMWF (Avrupa)'},
+  {id:'icon_seamless', name:'ICON (Almanya DWD)'},
+  {id:'gfs_seamless', name:'GFS (ABD NOAA)'},
+  {id:'ukmo_seamless', name:'UKMO (İngiltere)'},
+  {id:'meteofrance_seamless', name:'Météo-France'}
+];
+
+const state = { loc:null, data:null, models:[], selDay:0 };
+
+async function loadForecast(loc){
+  state.loc = loc;
+  setStatus('<span class="spinner"></span> Tahmin indiriliyor…');
+  const base = `latitude=${loc.lat}&longitude=${loc.lon}&timezone=${encodeURIComponent(TZ)}&wind_speed_unit=kmh&forecast_days=7`;
+  const elev = loc.elev!=null ? `&elevation=${loc.elev}` : '';
+  try{
+    const mainP = getJSON(`${FC}?${base}${elev}&hourly=${HOURLY}&daily=${DAILY}&current=${CURRENT}&models=best_match`);
+    const modelPs = MODELS.map(m => getJSON(`${FC}?${base}${elev}&hourly=precipitation,temperature_2m,snowfall,wind_speed_10m&models=${m.id}`).then(j=>({...m, h:j.hourly})));
+    const data = await mainP;
+    state.data = data;
+    const today = nowLocalISO().slice(0,10);
+    const idx = data.daily.time.indexOf(today);
+    if(state.selDay >= data.daily.time.length || state.selDay < 0) state.selDay = 0;
+    if(!state.userPickedDay) state.selDay = Math.max(0, idx);
+    store.set('hd_loc', loc);
+    render();
+    const settled = await Promise.allSettled(modelPs);
+    state.models = settled.filter(s=>s.status==='fulfilled' && s.value.h && s.value.h.precipitation && s.value.h.precipitation.some(v=>v!=null)).map(s=>s.value);
+    renderModels();
+    state.updated = new Date();
+    setStatus('Güncellendi: ' + state.updated.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){ showError(e); }
+}
+
+function setStatus(h){ $('#status').innerHTML = h; }
+function showError(e){
+  setStatus('');
+  $('#app').innerHTML = `<div class="card alert danger"><b>Veri alınamadı.</b> ${esc(e.message||e)}<br><span class="muted">İnternet bağlantını kontrol edip “Yenile”ye bas.</span></div>`;
+}
+
+/* ---------- analiz ---------- */
+function episodes(h, from, to){
+  // ardışık yağışlı saatleri "yağış dönemi" olarak grupla
+  const eps = []; let cur = null;
+  for(let i=from;i<to;i++){
+    const p = h.precipitation[i] || 0, s = h.snowfall[i] || 0;
+    if(p >= 0.1){
+      if(!cur) cur = {start:i, end:i, total:0, snow:0, peak:0, peakI:i, prob:0};
+      cur.end = i; cur.total += p; cur.snow += s; cur.prob = Math.max(cur.prob, h.precipitation_probability[i]||0);
+      if(p > cur.peak){ cur.peak = p; cur.peakI = i; }
+    } else if(cur){ eps.push(cur); cur = null; }
+  }
+  if(cur) eps.push(cur);
+  return eps;
+}
+function amountWords(mm){
+  if(mm < 0.5) return 'iz miktarda, yere ancak işaret bırakır';
+  if(mm < 2) return 'az; zemini ıslatır';
+  if(mm < 5) return 'hafif-orta; su birikintileri oluşur';
+  if(mm < 10) return 'belirgin; gün boyu ıslak zemin';
+  if(mm < 25) return 'bol; yollarda su birikir';
+  if(mm < 50) return 'çok fazla; su baskını riski';
+  return 'aşırı; sel/taşkın riski yüksek';
+}
+
+/* ---------- çizim ---------- */
+function render(){
+  const d = state.data, loc = state.loc, c = d.current, h = d.hourly, D = d.daily;
+  const nowISO = nowLocalISO();
+  const nowH = nowISO.slice(0,13)+':00';
+  let ni = h.time.indexOf(nowH); if(ni < 0) ni = 0;
+  const w = wmo(c.weather_code, c.is_day);
+  const wc = windClass(c.wind_speed_10m);
+
+  // önümüzdeki 24 saat analizi
+  const next24 = episodes(h, ni, Math.min(ni+24, h.time.length));
+  const nextRain = (()=>{ for(let i=ni;i<h.time.length;i++){ if((h.precipitation[i]||0)>=0.1) return i; } return -1; })();
+  let alerts = [];
+  const maxRain24 = Math.max(0, ...h.precipitation.slice(ni, ni+24).map(v=>v||0));
+  const maxGust24 = Math.max(0, ...h.wind_gusts_10m.slice(ni, ni+24).map(v=>v||0));
+  const snow24 = h.snowfall.slice(ni, ni+24).reduce((a,b)=>a+(b||0),0);
+  const minT24 = Math.min(...h.temperature_2m.slice(ni, ni+24).filter(v=>v!=null));
+  const storm24 = h.weather_code.slice(ni, ni+24).some(x=>x>=95);
+  if(maxRain24 >= 20) alerts.push(['danger', `Önümüzdeki 24 saatte saatlik <b>${fmt(maxRain24)} mm</b>'ye varan çok kuvvetli yağış bekleniyor — sel/su baskını riski.`]);
+  else if(maxRain24 >= 7.6) alerts.push(['', `Önümüzdeki 24 saatte saatlik <b>${fmt(maxRain24)} mm</b>'ye varan kuvvetli yağış bekleniyor.`]);
+  if(storm24) alerts.push(['danger','Önümüzdeki 24 saatte gök gürültülü sağanak / fırtına ihtimali var.']);
+  if(maxGust24 >= 62) alerts.push(['danger', `Rüzgâr hamleleri <b>${fmt(maxGust24,0)} km/s</b>'ye ulaşabilir (fırtına).`]);
+  else if(maxGust24 >= 45) alerts.push(['', `Rüzgâr hamleleri <b>${fmt(maxGust24,0)} km/s</b>'ye ulaşabilir.`]);
+  if(snow24 >= 1) alerts.push(['', `Önümüzdeki 24 saatte toplam <b>${fmt(snow24)} cm</b> kar yağışı bekleniyor.`]);
+  if(minT24 <= 0) alerts.push(['', `Sıcaklık <b>${fmt(minT24)}°C</b>'ye düşüyor — buzlanma / don riski.`]);
+  if(!alerts.length) alerts.push(['ok','Önümüzdeki 24 saat için dikkat gerektiren bir durum görünmüyor.']);
+
+  let rainLine;
+  if((c.precipitation||0) >= 0.1) rainLine = `Şu an yağış var: <b>${fmt(c.precipitation)} mm/saat</b> ${rainBadge(c.precipitation)}`;
+  else if(nextRain >= 0){
+    const hrs = nextRain - ni;
+    rainLine = hrs <= 0 ? `Bu saat içinde yağış başlayabilir.` :
+      `Sonraki yağış: <b>${dayLong(h.time[nextRain].slice(0,10))} ${hourOf(h.time[nextRain])}</b> (yaklaşık ${hrs} saat sonra), ${fmt(h.precipitation[nextRain])} mm/saat ${rainBadge(h.precipitation[nextRain])}`;
+  } else rainLine = 'Önümüzdeki 7 gün yağış beklenmiyor.';
+
+  const locNote = loc.fallback ? `<div class="alert">“${esc(loc.name)}” ilçesi tam bulunamadı, <b>${esc(loc.matched)}</b> konumu kullanıldı. Daha hassas sonuç için sağ üstteki aramadan mahalle/köy adını dene.</div>` : '';
+
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="loc">
+      <h1>📍 ${esc(loc.name)}${loc.il && !String(loc.name).includes(loc.il) ? ', '+esc(loc.il) : ''}</h1>
+      <span class="muted">${fmt(loc.lat,3)}°K, ${fmt(loc.lon,3)}°D · ${loc.elev!=null ? Math.round(loc.elev)+' m rakım' : ''} ·
+      <a href="https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lon}#map=12/${loc.lat}/${loc.lon}" target="_blank" rel="noopener">haritada gör</a></span>
+    </div>
+    ${locNote}
+    <div class="now" style="margin-top:12px">
+      <div class="big">${w.ic}</div>
+      <div>
+        <div class="temp">${fmt(c.temperature_2m)}°C <span class="muted" style="font-size:16px;font-weight:400">hissedilen ${fmt(c.apparent_temperature)}°C</span></div>
+        <div>${w.txt}</div>
+        <div style="margin-top:4px">${rainLine}</div>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b style="color:${wc.col}">${arrow(c.wind_direction_10m)} ${fmt(c.wind_speed_10m,0)} km/s</b><span>Rüzgâr (${wc.txt}, ${dirTxt(c.wind_direction_10m)}) · hamle ${fmt(c.wind_gusts_10m,0)}</span></div>
+      <div class="kpi"><b>%${fmt(c.relative_humidity_2m,0)}</b><span>Nem</span></div>
+      <div class="kpi"><b>%${fmt(c.cloud_cover,0)}</b><span>Bulutluluk</span></div>
+      <div class="kpi"><b>${fmt(c.pressure_msl,0)} hPa</b><span>Basınç</span></div>
+      <div class="kpi"><b>${hourOf(D.sunrise[state.selDay]||'')} / ${hourOf(D.sunset[state.selDay]||'')}</b><span>Gün doğumu / batımı</span></div>
+      <div class="kpi"><b>${fmt(D.uv_index_max[state.selDay],0)}</b><span>En yüksek UV</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚠️ Önümüzdeki 24 saat</h2>
+    ${alerts.map(a=>`<div class="alert ${a[0]}">${a[1]}</div>`).join('')}
+    ${next24.length ? `<div class="muted" style="margin-top:8px">24 saat içinde ${next24.length} yağış dönemi, toplam <b style="color:var(--text)">${fmt(next24.reduce((a,e)=>a+e.total,0))} mm</b> (= ${fmt(next24.reduce((a,e)=>a+e.total,0))} litre/m²).</div>` : ''}
+  </div>
+
+  <div class="card">
+    <h2>📅 7 günlük</h2>
+    <div class="days">${D.time.map((t,i)=>{
+      const ww = wmo(D.weather_code[i]);
+      return `<div class="day ${i===state.selDay?'sel':''}" data-d="${i}">
+        <div class="muted" style="font-size:12.5px">${dayName(t)}</div>
+        <div class="ic">${ww.ic}</div>
+        <div><b>${fmt(D.temperature_2m_max[i],0)}°</b> <span class="muted">${fmt(D.temperature_2m_min[i],0)}°</span></div>
+        <div class="rr">${(D.precipitation_sum[i]||0)>=0.1 ? '💧 '+fmt(D.precipitation_sum[i])+' mm' : '&nbsp;'}</div>
+        <div class="sn">${(D.snowfall_sum[i]||0)>=0.1 ? '❄️ '+fmt(D.snowfall_sum[i])+' cm' : ''}</div>
+        <div class="muted" style="font-size:12px">💨 ${fmt(D.wind_gusts_10m_max[i],0)}</div>
+      </div>`;}).join('')}</div>
+  </div>
+
+  <div id="dayDetail"></div>
+  <div id="models"></div>`;
+
+  document.querySelectorAll('.day').forEach(el=>el.addEventListener('click',()=>{
+    state.selDay = +el.dataset.d; state.userPickedDay = true;
+    document.querySelectorAll('.day').forEach(x=>x.classList.toggle('sel', x===el));
+    renderDay(); renderModels();
+  }));
+  renderDay();
+}
+
+function dayRange(){
+  const h = state.data.hourly, day = state.data.daily.time[state.selDay];
+  const from = h.time.findIndex(t=>t.startsWith(day));
+  let to = from; while(to < h.time.length && h.time[to].startsWith(day)) to++;
+  return [from, to, day];
+}
+
+function renderDay(){
+  const d = state.data, h = d.hourly, D = d.daily, i = state.selDay;
+  const [from, to, day] = dayRange();
+  const nowH = nowLocalISO().slice(0,13)+':00';
+  const eps = episodes(h, from, to);
+  const total = D.precipitation_sum[i] || 0;
+  const sun = (D.sunshine_duration[i]||0)/3600;
+  const maxP = Math.max(0, ...h.precipitation.slice(from,to).map(v=>v||0));
+
+  // özet cümlesi
+  let sum = `<b>${dayLong(day)}:</b> ${wmo(D.weather_code[i]).txt.toLowerCase()}, sıcaklık ${fmt(D.temperature_2m_min[i],0)}° ile ${fmt(D.temperature_2m_max[i],0)}° arası. `;
+  if(total >= 0.1){
+    sum += `Toplam yağış <b>${fmt(total)} mm</b> (${fmt(total)} litre/m² — ${amountWords(total)}), yaklaşık <b>${fmt(D.precipitation_hours[i],0)} saat</b> sürüyor, en şiddetli saatte ${fmt(maxP)} mm ${rainBadge(maxP)}. Yağış ihtimali en fazla %${fmt(D.precipitation_probability_max[i],0)}. `;
+  } else sum += 'Yağış beklenmiyor. ';
+  if((D.snowfall_sum[i]||0) >= 0.1) sum += `Kar: <b>${fmt(D.snowfall_sum[i])} cm</b>. `;
+  sum += `Güneşli süre ~${fmt(sun,1)} saat. En kuvvetli rüzgâr ${fmt(D.wind_speed_10m_max[i],0)} km/s, hamle ${fmt(D.wind_gusts_10m_max[i],0)} km/s (${windClass(D.wind_gusts_10m_max[i]).txt.toLowerCase()}).`;
+
+  const epHtml = eps.length ? eps.map(e=>{
+    const s = h.time[e.start], en = h.time[e.end];
+    const dur = e.end - e.start + 1;
+    const pc = rainClass(e.peak);
+    return `<div class="ep">🕒 <b>${hourOf(s)} – ${String((+hourOf(en).slice(0,2)+1)%24).padStart(2,'0')}:00</b> (${dur} saat) ·
+      toplam <b>${fmt(e.total)} mm</b>${e.snow>=0.1 ? ` · kar ${fmt(e.snow)} cm` : ''} ·
+      en şiddetli ${hourOf(h.time[e.peakI])}: ${fmt(e.peak)} mm/saat ${rainBadge(e.peak)} · ihtimal %${fmt(e.prob,0)}
+      ${pc.note ? `<div class="muted" style="font-size:13px;margin-top:4px">${pc.note}</div>` : ''}</div>`;
+  }).join('') : '<div class="muted">Bu gün yağış dönemi yok.</div>';
+
+  const rows = [];
+  for(let k=from;k<to;k++){
+    const t = h.time[k], p = h.precipitation[k]||0, sn = h.snowfall[k]||0;
+    const w = wmo(h.weather_code[k], h.is_day[k]);
+    const wc = windClass(h.wind_speed_10m[k]), gc = windClass(h.wind_gusts_10m[k]);
+    const cls = t < nowH ? 'past' : (t === nowH ? 'nowrow' : '');
+    const sunMin = Math.round((h.sunshine_duration[k]||0)/60);
+    rows.push(`<tr class="${cls}">
+      <td><b>${hourOf(t)}</b></td>
+      <td class="l">${w.ic} ${w.txt}</td>
+      <td><b>${fmt(h.temperature_2m[k],0)}°</b> <span class="muted">(${fmt(h.apparent_temperature[k],0)}°)</span></td>
+      <td class="l">${p>=0.1 ? `<b>${fmt(p)}</b> mm<span class="mmbar" style="width:${Math.min(60, 6+p*6)}px;background:${rainClass(p).col}"></span> ${rainBadge(p)}` : '<span class="muted">–</span>'}</td>
+      <td>%${fmt(h.precipitation_probability[k],0)}</td>
+      <td>${sn>=0.05 ? `<b style="color:var(--snow)">${fmt(sn)} cm</b>` : '<span class="muted">–</span>'}</td>
+      <td style="color:${wc.col}">${arrow(h.wind_direction_10m[k])} ${fmt(h.wind_speed_10m[k],0)} <span class="muted">${dirTxt(h.wind_direction_10m[k])}</span></td>
+      <td style="color:${gc.col}">${fmt(h.wind_gusts_10m[k],0)}</td>
+      <td>%${fmt(h.cloud_cover[k],0)}</td>
+      <td>${sunMin ? '☀️ '+sunMin+' dk' : '<span class="muted">–</span>'}</td>
+      <td>%${fmt(h.relative_humidity_2m[k],0)}</td>
+      <td>${h.visibility[k]!=null ? fmt(h.visibility[k]/1000,1)+' km' : '–'}</td>
+      <td>${fmt(h.uv_index[k],0)}</td>
+    </tr>`);
+  }
+
+  $('#dayDetail').innerHTML = `
+  <div class="card">
+    <h2>🔎 Gün analizi</h2>
+    <div>${sum}</div>
+  </div>
+  <div class="card">
+    <h2>🌧️ Saatlik yağış ve sıcaklık</h2>
+    <div class="chartwrap">${chartSVG(from,to)}</div>
+    <div class="legend">${[0.3,1,5,10,30,60].map(v=>{const c=rainClass(v);return `<span class="badge" style="background:${c.col};color:${c.fg}">${c.txt}</span>`;}).join('')}
+      <span class="muted" style="font-size:12px">mm/saat: &lt;0,5 · 0,5–2,5 · 2,5–7,6 · 7,6–20 · 20–50 · 50+ · <span style="color:var(--sun)">— sıcaklık</span> · <span style="color:var(--accent)">··· yağış ihtimali</span></span></div>
+  </div>
+  <div class="grid2">
+    <div class="card episodes"><h2>☔ Yağış dönemleri</h2>${epHtml}</div>
+    <div class="card"><h2>📏 Ne kadar yağmur ne demek?</h2>
+      <div class="muted" style="line-height:1.6">
+      <b style="color:var(--text)">1 mm yağış = 1 m²'ye 1 litre su.</b><br>
+      Saatlik değer <b style="color:var(--text)">şiddeti</b>, günlük toplam <b style="color:var(--text)">miktarı</b> gösterir.<br>
+      • 0,1–0,5 mm/saat: çisenti, şemsiyesiz idare eder<br>
+      • 0,5–2,5: hafif yağmur, ıslatır<br>
+      • 2,5–7,6: orta, su birikintileri<br>
+      • 7,6–20: kuvvetli, şemsiye zor korur<br>
+      • 20–50: çok kuvvetli, ani sel riski<br>
+      • 50+: aşırı, taşkın<br>
+      Günlük 10 mm "yağışlı gün", 50 mm üzeri çoğu yer için "olağanüstü" sayılır. Kar için kabaca 1 mm su ≈ 1 cm kar.
+      </div></div>
+  </div>
+  <div class="card">
+    <h2>🕐 Saat saat detay</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Saat</th><th>Durum</th><th>Sıcaklık (hiss.)</th><th>Yağış mm/saat · şiddet</th><th>İhtimal</th><th>Kar</th><th>Rüzgâr km/s</th><th>Hamle</th><th>Bulut</th><th>Güneş</th><th>Nem</th><th>Görüş</th><th>UV</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function chartSVG(from, to){
+  const h = state.data.hourly;
+  const n = to - from, W = Math.max(720, n*34), H = 230, pl = 36, pr = 36, pt = 14, pb = 34;
+  const cw = (W-pl-pr)/n;
+  const ps = h.precipitation.slice(from,to).map(v=>v||0);
+  const ts = h.temperature_2m.slice(from,to);
+  const pr_ = h.precipitation_probability.slice(from,to);
+  const pMax = Math.max(2, ...ps) * 1.15;
+  const tMin = Math.min(...ts.filter(v=>v!=null)) - 1, tMax = Math.max(...ts.filter(v=>v!=null)) + 1;
+  const y = v => pt + (H-pt-pb) * (1 - v/pMax);
+  const yt = v => pt + (H-pt-pb) * (1 - (v - tMin)/(tMax - tMin || 1));
+  const yp = v => pt + (H-pt-pb) * (1 - v/100);
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Saatlik yağış grafiği">`;
+  // ızgara
+  for(let g=0; g<=4; g++){ const yy = pt + (H-pt-pb)*g/4; s += `<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="#26384b" stroke-width="1"/>`;
+    s += `<text x="${pl-6}" y="${yy+4}" text-anchor="end">${fmt(pMax*(1-g/4),1)}</text>`;
+    s += `<text x="${W-pr+6}" y="${yy+4}">${fmt(tMax-(tMax-tMin)*g/4,0)}°</text>`; }
+  s += `<text x="4" y="${pt-2}">mm</text>`;
+  // gündüz arka planı
+  for(let k=0;k<n;k++){ if(!h.is_day[from+k]) s += `<rect x="${pl+k*cw}" y="${pt}" width="${cw}" height="${H-pt-pb}" fill="#0b121a" opacity=".55"/>`; }
+  // barlar
+  ps.forEach((p,k)=>{ if(p<0.05) return; const c = rainClass(Math.max(p,0.1));
+    s += `<rect x="${pl+k*cw+3}" y="${y(p)}" width="${cw-6}" height="${H-pb-y(p)}" rx="3" fill="${c.col==='transparent'?'#2b4a6b':c.col}"><title>${hourOf(h.time[from+k])}: ${fmt(p)} mm (${c.txt})</title></rect>`;
+    if(p>=0.5) s += `<text x="${pl+k*cw+cw/2}" y="${y(p)-4}" text-anchor="middle" style="fill:#e6edf3;font-size:10px">${fmt(p)}</text>`; });
+  // olasılık
+  s += `<polyline fill="none" stroke="#4fb3ff" stroke-width="1.5" stroke-dasharray="3 3" points="${pr_.map((v,k)=>`${pl+k*cw+cw/2},${yp(v||0)}`).join(' ')}"/>`;
+  // sıcaklık
+  s += `<polyline fill="none" stroke="#ffc94d" stroke-width="2.2" points="${ts.map((v,k)=>`${pl+k*cw+cw/2},${yt(v)}`).join(' ')}"/>`;
+  // saat etiketleri
+  for(let k=0;k<n;k++){ if(k%2===0) s += `<text x="${pl+k*cw+cw/2}" y="${H-pb+16}" text-anchor="middle">${hourOf(h.time[from+k]).slice(0,2)}</text>`; }
+  // şimdi çizgisi
+  const nowH = nowLocalISO().slice(0,13)+':00', nk = h.time.slice(from,to).indexOf(nowH);
+  if(nk>=0) s += `<line x1="${pl+nk*cw+cw/2}" x2="${pl+nk*cw+cw/2}" y1="${pt}" y2="${H-pb}" stroke="#ff4d6d" stroke-width="1.5"/><text x="${pl+nk*cw+cw/2+3}" y="${pt+10}" style="fill:#ff4d6d">şimdi</text>`;
+  return s + '</svg>';
+}
+
+function renderModels(){
+  const el = $('#models'); if(!el || !state.data) return;
+  const ms = state.models;
+  if(!ms.length){ el.innerHTML = ''; return; }
+  const h = state.data.hourly; const [from, to, day] = dayRange();
+  const map = ms.map(m => { const idx = {}; m.h.time.forEach((t,i)=>idx[t]=i); return {...m, idx}; });
+  // günlük toplamlar
+  const totals = map.map(m => h.time.slice(from,to).reduce((a,t)=>a + (m.h.precipitation[m.idx[t]]||0), 0));
+  // saatlik uyum: modellerin kaçı yağış diyor
+  let agreeHours = 0, rainyAny = 0;
+  const rows = [];
+  for(let k=from;k<to;k++){
+    const t = h.time[k];
+    const vals = map.map(m => m.h.precipitation[m.idx[t]]);
+    const valid = vals.filter(v=>v!=null);
+    const wet = valid.filter(v=>v>=0.1).length;
+    if(wet) rainyAny++;
+    const agree = valid.length ? Math.max(wet, valid.length-wet)/valid.length : 0;
+    if(agree >= 0.8) agreeHours++;
+    if(k%1===0) rows.push(`<tr><td><b>${hourOf(t)}</b></td>${vals.map(v=>`<td style="${v>=0.1?`color:${rainClass(v).col==='transparent'?'inherit':rainClass(v).col};font-weight:600`:'color:var(--muted)'}">${v==null?'·':(v>=0.1?fmt(v):'0')}</td>`).join('')}<td>${valid.length? `${wet}/${valid.length}` : '–'}</td></tr>`);
+  }
+  const n = to-from;
+  const agreePct = n ? Math.round(100*agreeHours/n) : 0;
+  const tv = totals.filter(v=>v!=null);
+  const spread = tv.length ? Math.max(...tv) - Math.min(...tv) : 0;
+  let verdict, col;
+  if(agreePct >= 85 && spread < 3){ verdict='Yüksek güven — modeller büyük ölçüde aynı şeyi söylüyor.'; col='var(--wind)'; }
+  else if(agreePct >= 65){ verdict='Orta güven — yağışın saati/miktarı birkaç saat ya da birkaç mm kayabilir.'; col='var(--sun)'; }
+  else { verdict='Düşük güven — modeller farklı; tahmin değişebilir, gün içinde tekrar kontrol et.'; col='var(--warn)'; }
+  el.innerHTML = `<div class="card">
+    <h2>🧪 Model uyumu — tahmin ne kadar güvenilir? (${dayName(day)})</h2>
+    <div class="agree" style="color:${col}">${verdict}</div>
+    <div class="muted" style="margin:6px 0 10px">Saatlerin %${agreePct}'inde modellerin en az %80'i yağış var/yok konusunda hemfikir. Günlük toplam yağış tahminleri:
+      ${map.map((m,i)=>`<b style="color:var(--text)">${esc(m.name)}</b> ${fmt(totals[i])} mm`).join(' · ')}.</div>
+    <div class="tablewrap" style="max-height:380px"><table>
+      <thead><tr><th>Saat</th>${map.map(m=>`<th>${esc(m.name)}</th>`).join('')}<th>Yağış diyen</th></tr></thead>
+      <tbody>${rows.join('')}</tbody></table></div>
+    <div class="muted" style="font-size:12.5px;margin-top:8px">Üstteki ana tahmin, Open-Meteo'nun konuma göre en iyi modelleri birleştirdiği “best match” sonucudur. Değerler mm/saat.</div>
+  </div>`;
+}
+
+/* ---------- başlangıç ---------- */
+(function init(){
+  const sel = store.get('hd_sel');
+  const il = sel && ILCELER[sel.il] ? sel.il : 'İstanbul';
+  ilSel.value = il; fillIlce(il, sel ? sel.ilce : '');
+  const last = store.get('hd_loc');
+  if(last && last.lat) loadForecast(last); else loadByIlIlce(il, ilceSel.value);
+  setInterval(()=>{ if(state.loc && document.visibilityState==='visible') loadForecast(state.loc); }, 30*60*1000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && state.loc && state.updated && (Date.now()-state.updated) > 15*60*1000) loadForecast(state.loc);
+  });
+})();
+</script>
+</body>
+</html>
